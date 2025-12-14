@@ -1,0 +1,438 @@
+\documentclass[12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{float}
+\usepackage{subcaption}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=cyan,
+}
+
+\geometry{a4paper, margin=1in}
+\title{Convolutional Neural Network for Convective Available Potential Energy (CAPE) Prediction in Morocco: A Meteorological Data Analysis}
+\author{Mohammed El Abdioui\\ Abdellah Msaadi}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This report presents a comprehensive analysis of Convective Available Potential Energy (CAPE) prediction in Morocco using meteorological data from 2024. A Convolutional Neural Network (CNN) model was developed to predict CAPE values based on 12 meteorological variables. The dataset comprises 1,835,898 samples with hourly temporal resolution and spatial coverage across Morocco. The implemented CNN model achieved a test R² score of 0.5974, RMSE of 148.01 J/kg, and MAE of 37.27 J/kg, representing a 29.9\% improvement over previous temporal splitting approaches. The mixed-date splitting strategy provided robust evaluation across different seasons, with Summer showing the best performance (R²=0.7168) and Spring the worst (R²=0.3611). Feature importance analysis identified 2m dewpoint temperature (2d) and convective inhibition (cin) as the most significant predictors of CAPE.
+\end{abstract}
+\newpage
+\tableofcontents
+\newpage
+
+\section{Introduction}
+
+\subsection{Background}
+Convective Available Potential Energy (CAPE) is a crucial meteorological parameter that measures the amount of energy available for convection. It plays a vital role in thunderstorm development and severe weather forecasting. In Morocco, accurate CAPE prediction is particularly important for agricultural planning, water resource management, and severe weather warning systems.
+
+\subsection{Convolutional Neural Networks (CNNs)}
+Convolutional Neural Networks (CNNs) are a class of deep neural networks particularly effective for processing structured grid data. While traditionally used for image processing, CNNs have shown excellent performance in meteorological applications due to their ability to:
+
+\begin{itemize}
+    \item Capture spatial hierarchies through convolutional layers
+    \item Learn local patterns and translate them to global features
+    \item Handle multi-dimensional meteorological data efficiently
+    \item Extract meaningful features automatically from raw data
+\end{itemize}
+
+In this study, we apply CNNs to meteorological time series data, treating the temporal dimension as a spatial dimension to capture temporal patterns in atmospheric variables.
+
+\section{Dataset Description and Preprocessing}
+
+\subsection{Data Source and Structure}
+The dataset originates from meteorological reanalysis data for Morocco covering the entire year 2024. The original NetCDF file contains:
+
+\begin{itemize}
+    \item \textbf{Temporal dimension}: 8,784 hourly time steps (366 days × 24 hours)
+    \item \textbf{Spatial dimension}: 81 latitude points (20°N to 40°N) × 101 longitude points (-20°W to 5°E)
+    \item \textbf{Variables}: 13 meteorological variables as detailed in Table \ref{tab:variables}
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\caption{Meteorological Variables in the Dataset}
+\label{tab:variables}
+\begin{tabular}{llll}
+\toprule
+\textbf{Variable} & \textbf{Description} & \textbf{Original Units} & \textbf{Converted Units} \\
+\midrule
+10u & 10m U wind component & m s⁻¹ & m/s \\
+10v & 10m V wind component & m s⁻¹ & m/s \\
+2t & 2m temperature & K & °C \\
+2d & 2m dewpoint temperature & K & °C \\
+msl & Mean sea level pressure & Pa & hPa \\
+tp & Total precipitation & m & mm \\
+tcc & Total cloud cover & 0-1 & 0-1 \\
+cp & Convective precipitation & m & mm \\
+lsp & Large-scale precipitation & m & mm \\
+blh & Boundary layer height & m & m \\
+cape & Convective available potential energy & J kg⁻¹ & J/kg \\
+cin & Convective inhibition & J kg⁻¹ & J/kg \\
+tco3 & Total column ozone & kg m⁻² & kg/m² \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Data Sampling Strategy}
+To create a manageable dataset for machine learning while preserving representativeness, we implemented a stratified sampling approach:
+
+\begin{itemize}
+    \item \textbf{Temporal sampling}: 10\% of time points randomly selected (878 out of 8,784 hours)
+    \item \textbf{Spatial sampling}: Every 2nd latitude and longitude point (41×51 grid)
+    \item \textbf{Final dataset}: 1,835,898 samples (2.55\% of original data)
+    \item \textbf{NaN handling}: CIN values with 95.06\% missingness were imputed with 0
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{CApe.png}
+\caption{Spatial distribution of sampled data points over Morocco}
+\label{fig:dataset_spatial}
+\end{figure}
+
+\section{Exploratory Data Analysis}
+
+\subsection{Spatial Analysis of CAPE}
+Spatial analysis revealed distinct patterns in CAPE distribution across Morocco:
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.48\textwidth}
+\includegraphics[width=\textwidth]{cape_mean.png}
+\caption{Mean CAPE distribution}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.48\textwidth}
+\includegraphics[width=\textwidth]{std.png}
+\caption{CAPE variability}
+\end{subfigure}
+\caption{Spatial distribution of CAPE values across Morocco}
+\label{fig:cape_spatial}
+\end{figure}
+
+Key observations from spatial analysis:
+\begin{itemize}
+    \item Highest mean CAPE values observed in southeastern regions
+    \item Coastal areas show lower CAPE values due to maritime influence
+    \item Strong seasonal variation with maximum values in summer months
+    \item Spatial patterns consistent with known climatic zones of Morocco
+\end{itemize}
+
+\subsection{Temporal Patterns}
+Temporal analysis revealed significant seasonal patterns in CAPE distribution across Morocco. The monthly analysis shows clear variations in CAPE values throughout the year:
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{month.png}
+\caption{CAPE distribution across all 12 months in Morocco (2024) showing seasonal variations}
+\label{fig:cape_monthly_grid}
+\end{figure}
+
+The 12-month grid visualization reveals the following patterns:
+
+\begin{itemize}
+    \item \textbf{Winter months (Dec-Feb)}: Lower CAPE values across most regions, particularly in coastal areas
+    \item \textbf{Spring transition (Mar-May)}: Gradual increase in CAPE, especially in southeastern regions
+    \item \textbf{Summer peak (Jun-Aug)}: Maximum CAPE values, with hotspots in southeastern Morocco reaching over 200 J/kg
+    \item \textbf{Fall transition (Sep-Nov)}: Gradual decrease in CAPE values back to winter levels
+\end{itemize}
+
+This monthly analysis demonstrates the strong seasonal dependence of convective potential in Morocco, with summer months exhibiting the most favorable conditions for convective development.
+\subsection{Correlation Analysis}
+Correlation analysis identified relationships between variables:
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{corelation.png}
+\caption{Correlation matrix of 13 meteorological variables}
+\label{fig:correlation_matrix}
+\end{figure}
+
+The strongest correlations with CAPE were:
+\begin{itemize}
+    \item \textbf{CIN}: 0.4647 (positive)
+    \item \textbf{2m dewpoint temperature (2d)}: 0.2401 (positive)
+    \item \textbf{Boundary layer height (blh)}: -0.0567 (negative)
+\end{itemize}
+
+\section{Feature Importance Analysis}
+
+\subsection{Random Forest Feature Importance}
+Random Forest regression identified the most important features for CAPE prediction:
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{topfeature.png}
+\caption{Feature importance ranking from Random Forest analysis}
+\label{fig:feature_importance}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Top 6 Feature Importance Rankings}
+\label{tab:feature_ranking}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Rank} & \textbf{Feature} & \textbf{RF Importance} & \textbf{Correlation} & \textbf{Units} \\
+\midrule
+1 & 2d & 0.4055 & 0.2401 & °C \\
+2 & cin & 0.2273 & 0.4647 & J/kg \\
+3 & tco3 & 0.1005 & 0.0447 & kg/m² \\
+4 & 2t & 0.0542 & 0.0254 & °C \\
+5 & 10u & 0.0461 & -0.0111 & m/s \\
+6 & msl & 0.0437 & -0.0437 & hPa \\
+\bottomrule
+\end{tabular}
+\end{table}
+\newpage
+\section{CNN Model Development}
+
+\subsection{Model Architecture}
+The CNN architecture was designed specifically for meteorological time series prediction:
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{image.png}
+\caption{CNN architecture for CAPE prediction}
+\label{fig:cnn_architecture}
+\end{figure}
+
+\subsection{Model Parameters}
+\begin{itemize}
+    \item \textbf{Input shape}: (1, 12) - single time step with 12 features
+    \item \textbf{Convolutional layers}: Two 1D convolutional layers with 32 and 128 filters
+    \item \textbf{Kernel size}: 2 for temporal feature extraction
+    \item \textbf{Regularization}: L2 regularization (0.001) and Dropout (0.3)
+    \item \textbf{Optimizer}: Adam with learning rate 0.001
+    \item \textbf{Loss function}: Mean Squared Error (MSE)
+\end{itemize}
+
+\subsection{Data Splitting Strategy}
+A mixed-date splitting approach was implemented for robust evaluation:
+
+\begin{itemize}
+    \item \textbf{Train set}: 234 dates (69.9\%, 1,298,511 samples)
+    \item \textbf{Validation set}: 50 dates (14.9\%, 265,557 samples)
+    \item \textbf{Test set}: 51 dates (15.2\%, 271,830 samples)
+    \item \textbf{Seasonal distribution}: Balanced across all seasons
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{date.png}
+\caption{Mixed date splitting strategy visualization}
+\label{fig:data_splitting}
+\end{figure}
+
+\section{Results and Model Performance}
+
+\subsection{Cross-Validation Results}
+5-fold cross-validation provided robust performance estimates:
+
+\begin{table}[H]
+\centering
+\caption{5-Fold Cross-Validation Results}
+\label{tab:cv_results}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Fold} & \textbf{MSE} & \textbf{RMSE (J/kg)} & \textbf{MAE (J/kg)} & \textbf{R²} \\
+\midrule
+1 & 23643.77 & 153.77 & 45.15 & 0.5760 \\
+2 & 23161.64 & 152.19 & 40.01 & 0.5831 \\
+3 & 24035.74 & 155.03 & 64.99 & 0.5589 \\
+4 & 20627.77 & 143.62 & 41.56 & 0.6176 \\
+5 & 31148.25 & 176.49 & 48.27 & 0.4098 \\
+\hline
+\textbf{Mean} & 24523.44 & 156.22 & 48.00 & 0.5491 \\
+\textbf{Std} & 3519.39 & 10.89 & 8.97 & 0.0722 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Final Model Performance}
+The final CNN model achieved excellent performance on the test set:
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.48\textwidth}
+\includegraphics[width=\textwidth]{download.png}
+\caption{Actual vs Predicted CAPE}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.48\textwidth}
+\includegraphics[width=\textwidth]{download (1).png}
+\caption{Residuals distribution}
+\end{subfigure}
+\caption{Model performance visualization}
+\label{fig:model_performance}
+\end{figure}
+
+\subsection{Performance Metrics}
+\begin{table}[H]
+\centering
+\caption{Final Model Performance Metrics}
+\label{tab:final_metrics}
+\begin{tabular}{lc}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+Test MSE & 21907.44 \\
+Test RMSE & 148.01 J/kg \\
+Test MAE & 37.27 J/kg \\
+Test R² & 0.5974 \\
+Pearson Correlation & 0.7796 \\
+Mean Absolute Error & 37.27 J/kg \\
+Median Absolute Error & 2.94 J/kg \\
+95th Percentile Error & 190.69 J/kg \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Seasonal Performance Analysis}
+The model showed varying performance across seasons:
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{download (3).png}
+\caption{Model performance across different seasons}
+\label{fig:seasonal_performance}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Seasonal Performance Analysis}
+\label{tab:seasonal_performance}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Season} & \textbf{R²} & \textbf{MAE (J/kg)} & \textbf{Samples} \\
+\midrule
+Winter & 0.5043 & 23.98 & 69,003 \\
+Spring & 0.3611 & 13.09 & 64,821 \\
+Summer & 0.7168 & 42.51 & 71,094 \\
+Fall & 0.4821 & 68.82 & 66,912 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Performance by CAPE Range}
+The model performed differently across CAPE value ranges:
+
+\begin{table}[H]
+\centering
+\caption{Performance Analysis by CAPE Range}
+\label{tab:cape_range_performance}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{CAPE Range (J/kg)} & \textbf{Samples} & \textbf{R²} & \textbf{MAE (J/kg)} & \textbf{RMSE (J/kg)} \\
+\midrule
+0-100 & 250,771 & -5.6639 & 10.29 & 35.22 \\
+100-500 & 12,815 & -3.3665 & 196.06 & 236.11 \\
+500-1000 & 4,296 & -8.5228 & 359.16 & 437.26 \\
+1000-2000 & 2,983 & -8.9534 & 789.73 & 873.22 \\
+2000-5000 & 965 & -10.9615 & 1179.55 & 1378.45 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Discussion}
+
+\subsection{Model Performance Insights}
+The CNN model achieved an R² of 0.5974, representing a 29.9\% improvement over previous temporal splitting approaches. Key insights:
+
+\begin{itemize}
+    \item \textbf{Best performance}: Summer months (R²=0.7168) due to more convective activity
+    \item \textbf{Worst performance}: Spring months (R²=0.3611) possibly due to transition seasons
+    \item \textbf{Diurnal patterns}: Model performed consistently across different hours
+    \item \textbf{Spatial patterns}: Better performance in regions with higher CAPE variability
+\end{itemize}
+
+\subsection{Feature Importance Interpretation}
+The feature importance analysis revealed:
+\begin{itemize}
+    \item 2m dewpoint temperature (2d) was the most important feature (40.55\% importance)
+    \item Convective inhibition (cin) showed the strongest correlation with CAPE (0.4647)
+    \item Total column ozone (tco3) emerged as an important predictor despite low correlation
+    \item Precipitation variables showed lower importance than expected
+\end{itemize}
+
+\subsection{Limitations and Challenges}
+\begin{itemize}
+    \item High negative R² values for specific CAPE ranges indicate model struggles with extreme values
+    \item Spatial dependencies may not be fully captured by point-based predictions
+    \item Seasonal variability presents challenges for consistent performance
+    \item Imbalanced dataset with many low CAPE values affects model training
+\end{itemize}
+
+\section{Conclusion and Future Work}
+
+\subsection{Conclusion}
+This study successfully developed a CNN model for CAPE prediction in Morocco using 2024 meteorological data. The mixed-date splitting strategy provided robust evaluation, and the model achieved competitive performance with an R² of 0.5974. The analysis revealed important seasonal patterns and identified key predictive features, particularly 2m dewpoint temperature and convective inhibition.
+
+\subsection{Future Work}
+\begin{itemize}
+    \item Incorporate spatial convolutional layers to capture spatial dependencies
+    \item Develop ensemble models combining CNN with other architectures
+    \item Implement attention mechanisms for temporal feature weighting
+    \item Expand dataset to include multiple years for better generalization
+    \item Develop uncertainty quantification methods for predictions
+    \item Integrate satellite data and radar observations for improved accuracy
+\end{itemize}
+
+
+\appendix
+\section{Appendix: Additional Results}
+
+\subsection{Monthly Performance Details}
+\begin{table}[H]
+\centering
+\caption{Detailed Monthly Performance Analysis}
+\label{tab:appendix_monthly}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Month} & \textbf{R²} & \textbf{MAE (J/kg)} & \textbf{Samples} \\
+\midrule
+January & 0.6028 & 10.02 & 23,409 \\
+February & 0.3489 & 8.26 & 19,839 \\
+March & -0.2062 & 7.99 & 22,542 \\
+April & 0.1693 & 12.95 & 20,157 \\
+May & 0.4888 & 17.27 & 22,122 \\
+June & 0.2467 & 17.93 & 23,832 \\
+July & 0.6877 & 45.62 & 23,865 \\
+August & 0.7622 & 85.40 & 23,397 \\
+September & 0.5304 & 95.49 & 21,624 \\
+October & 0.3961 & 48.26 & 23,016 \\
+November & 0.4616 & 106.50 & 22,272 \\
+December & 0.4940 & 39.92 & 21,735 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Project Implementation Notebook}
+The complete implementation of the DeepCAPE prediction system, including all data processing, model development, and evaluation steps, is documented in an executable Jupyter notebook. This notebook provides full transparency into the methodology and allows for reproducibility of the results presented in this report.
+
+The notebook is publicly available at:\\[0.5em]
+ \href{https://github.com/simoghost99/DeepCAPE-Convective-Available-Potential-Energy-Prediction-using-Convolutional-Neural-Networks/blob/main/CNN.ipynb}{DeepCAPE-Convective-Available-Potential-Energy-Prediction-using-Convolutional-Neural-Networks}
+
+This resource contains the complete code for:
+\begin{itemize}
+    \item Data loading and preprocessing from NetCDF files
+    \item Exploratory data analysis and visualization
+    \item Feature engineering and selection
+    \item CNN model architecture and implementation
+    \item Model training with hyperparameter optimization
+    \item Performance evaluation and result visualization
+\end{itemize}
+
+\end{document}
