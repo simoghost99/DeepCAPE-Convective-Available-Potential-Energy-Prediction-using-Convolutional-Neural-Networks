@@ -8,6 +8,7 @@
 \usepackage{booktabs}
 \usepackage{longtable}
 \usepackage{xcolor}
+\usepackage{colortbl}
 \usepackage{hyperref}
 \hypersetup{
     colorlinks=true,
@@ -205,7 +206,6 @@ The CNN architecture was designed specifically for meteorological time series pr
 \caption{CNN architecture for CAPE prediction}
 \label{fig:cnn_architecture}
 \end{figure}
-
 \subsection{Model Parameters}
 \begin{itemize}
     \item \textbf{Input shape}: (1, 12) - single time step with 12 features
@@ -215,6 +215,47 @@ The CNN architecture was designed specifically for meteorological time series pr
     \item \textbf{Optimizer}: Adam with learning rate 0.001
     \item \textbf{Loss function}: Mean Squared Error (MSE)
 \end{itemize}
+
+
+\subsection{Couche par Couche: Paramètres Dimensions}
+The detailed structure of the Convolutional Neural Network, including layer types, output shapes, and parameter counts, is presented below.
+
+\begin{table}[H]
+\centering
+\caption{Détails de l'Architecture CNN Couche par Couche}
+\label{tab:cnn_layers}
+\begin{tabular}{p{3.2cm}p{1.8cm}p{2.2cm}p{2.5cm}p{4cm}} % Largeurs ajustées pour être plus larges
+\toprule
+\textbf{Couche} & \textbf{Shape Sortie} & \textbf{Paramètres} & \textbf{Activation} & \textbf{Opérations Spéciales} \\
+\midrule
+InputLayer & (1, 12) & 0 & - & Reshape pour Conv1D \\
+\rowcolor{blue!10}
+Conv1D-1 & (1, 64) & 1,600 & ReLU & K=2, padding='same', L2(0.001) \\
+BatchNorm-1 & (1, 64) & 256 & - & $\gamma, \beta$ pour 64 canaux \\
+Dropout-1 & (1, 64) & 0 & - & Rate=0.15 pendant training \\
+\rowcolor{blue!10}
+Conv1D-2 & (1, 128) & 16,512 & ReLU & K=2, padding='same', L2(0.001) \\
+BatchNorm-2 & (1, 128) & 512 & - & Normalisation par batch \\
+\rowcolor{green!10}
+GlobalAvgPool1D & (128) & 0 & - & $y_c = \frac{1}{T}\sum_t x_{t,c}$ \\
+\rowcolor{orange!10}
+Dense-1 & (128) & 16,512 & ReLU & Fully connected, L2(0.001) \\
+BatchNorm-3 & (128) & 512 & - & Normalisation après dense \\
+Dropout-2 & (128) & 0 & - & Rate=0.30 (forte régularisation) \\
+\rowcolor{orange!10}
+Dense-2 & (64) & 8,256 & ReLU & Réduction dimension, L2(0.001) \\
+BatchNorm-4 & (64) & 256 & - & Dernière normalisation \\
+Dropout-3 & (64) & 0 & - & Rate=0.15 \\
+\rowcolor{red!10}
+Output (Dense) & (1) & 65 & Linear & Sortie finale, pas d'activation \\
+\midrule
+\textbf{Total} & & 44,481 & & \\
+\textbf{Trainable} & & 43,713 & & 98.3\% des paramètres \\
+\textbf{Non-trainable} & & 768 & & BatchNorm $\gamma,\beta$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 
 \subsection{Data Splitting Strategy}
 A mixed-date splitting approach was implemented for robust evaluation:
